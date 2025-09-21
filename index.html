@@ -1,0 +1,1388 @@
+<html lang="zh-CN"><head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CEJS - Console Editor</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    
+    <!-- Tailwind 配置 -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3B82F6',
+                        secondary: '#10B981',
+                        dark: '#1E293B',
+                        light: '#F8FAFC',
+                        accent: '#8B5CF6',
+                        variable: '#F59E0B',
+                        math: '#EC4899',
+                        tuple: '#6366F1',
+                        boolean: '#EF4444',
+                        string: '#10B981', // 新增：字符串类颜色
+                    },
+                    fontFamily: {
+                        code: ['Consolas', 'Monaco', 'monospace'],
+                    },
+                }
+            }
+        }
+    </script>
+    
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .blockly-block {
+                @apply bg-white rounded-lg shadow-md p-3 mb-3 cursor-pointer transition-all duration-200 hover:shadow-lg hover:translate-y-[-2px] border-l-4 border-primary;
+            }
+            .blockly-block-secondary {
+                @apply border-l-4 border-secondary;
+            }
+            .blockly-block-accent {
+                @apply border-l-4 border-accent;
+            }
+            .blockly-block-variable {
+                @apply border-l-4 border-variable;
+            }
+            .blockly-block-math {
+                @apply border-l-4 border-math;
+            }
+            .blockly-block-tuple {
+                @apply border-l-4 border-tuple;
+            }
+            .blockly-block-boolean {
+                @apply border-l-4 border-boolean;
+            }
+            .blockly-block-string {
+                @apply border-l-4 border-string; /* 新增：字符串类积木样式 */
+            }
+            .category-item {
+                @apply py-2 px-3 text-left cursor-pointer transition-all duration-200 hover:bg-primary/10 hover:text-primary rounded;
+            }
+            .category-item.active {
+                @apply bg-primary/20 text-primary font-medium;
+            }
+            .scroll-smooth {
+                scroll-behavior: smooth;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 h-screen flex flex-col overflow-hidden">
+    <!-- 顶部导航栏 -->
+    <header class="bg-dark text-white py-3 px-6 flex justify-between items-center shadow-md z-10">
+        <div class="flex items-center space-x-2">
+            <i class="fa fa-code text-primary text-2xl"></i>
+            <h1 class="text-xl font-bold">CEJS Editor&nbsp; &nbsp; &nbsp;中文正版CEJS JavaScript编辑器</h1>
+        </div>
+        <div class="flex space-x-4">
+            <button id="saveBtn" class="bg-secondary hover:bg-secondary/80 text-white px-4 py-2 rounded-md transition-colors duration-200 flex items-center">
+                <i class="fa fa-download mr-2"></i>保存为JS
+            </button>
+            <button id="clearBtn" class="bg-gray-600 hover:bg-gray-500 text-white px-4 py-2 rounded-md transition-colors duration-200 flex items-center">
+                <i class="fa fa-trash mr-2"></i>清空
+            </button>
+        </div>
+    </header>
+
+    <!-- 主内容区 -->
+    <main class="flex flex-1 overflow-hidden">
+        <!-- 左侧控件区 -->
+        <section class="w-1/3 bg-gray-50 border-r border-gray-300 flex overflow-hidden">
+            <!-- 分类导航 -->
+            <div class="w-1/4 bg-gray-100 border-r border-gray-300 p-2">
+                <h3 class="text-sm font-medium text-gray-600 mb-2 px-2">代码分类</h3>
+                <div class="space-y-1">
+                    <div class="category-item" data-category="output">
+                        <i class="fa fa-comment mr-1"></i>输出类
+                    </div>
+                    <div class="category-item" data-category="control">
+                        <i class="fa fa-cogs mr-1"></i>控制类
+                    </div>
+                    <div class="category-item" data-category="variable">
+                        <i class="fa fa-cube mr-1"></i>变量类
+                    </div>
+                    <div class="category-item" data-category="tuple">
+                        <i class="fa fa-list mr-1"></i>元组类
+                    </div>
+                    <div class="category-item" data-category="math">
+                        <i class="fa fa-calculator mr-1"></i>运算类
+                    </div>
+                    <div class="category-item" data-category="boolean">
+                        <i class="fa fa-check-square-o mr-1"></i>布尔类
+                    </div>
+                    <div class="category-item" data-category="string"> <!-- 新增：字符类分类 -->
+                        <i class="fa fa-font mr-1"></i>字符类
+                    </div>
+                    <div class="category-item" data-category="special"> <!-- 新增：特殊值分类 -->
+                        <i class="fa fa-asterisk mr-1"></i>特殊值
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 积木区域 -->
+            <div class="w-3/4 flex flex-col overflow-hidden">
+                <div class="p-4 bg-gray-100 border-b border-gray-300">
+                    <h2 class="font-bold text-lg text-dark">代码积木</h2>
+                    <p class="text-sm text-gray-500">点击添加到代码编辑区 | 右键调整参数</p>
+                </div>
+                
+                <div class="flex-1 overflow-y-auto p-4 space-y-2 scroll-smooth" id="blocksContainer">
+                    <!-- 输出类积木 (console开头) -->
+                    <div class="category-section" data-category="output">
+                        <h3 class="text-sm font-medium text-primary mb-2">输出类</h3>
+                        
+                        <!-- console.log 积木 -->
+                        <div class="blockly-block" data-function="log" data-template="console.log(&quot;{{value}}&quot;);">
+                            <div class="flex items-center">
+                                <span class="text-primary font-medium">console.</span>
+                                <span class="font-bold">log</span>
+                                <span class="mx-1">(</span>
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600">"{{value}}"</span>
+                                <span class="mx-1">)</span>
+                                <span>;</span>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">输出信息到控制台</div>
+                        </div>
+                        
+                        <!-- console.warn 积木 -->
+                        <div class="blockly-block blockly-block-secondary" data-function="warn" data-template="console.warn(&quot;{{value}}&quot;);">
+                            <div class="flex items-center">
+                                <span class="text-secondary font-medium">console.</span>
+                                <span class="font-bold">warn</span>
+                                <span class="mx-1">(</span>
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600">"{{value}}"</span>
+                                <span class="mx-1">)</span>
+                                <span>;</span>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">输出警告信息</div>
+                        </div>
+                        
+                        <!-- console.error 积木 -->
+                        <div class="blockly-block blockly-block-accent" data-function="error" data-template="console.error(&quot;{{value}}&quot;);">
+                            <div class="flex items-center">
+                                <span class="text-accent font-medium">console.</span>
+                                <span class="font-bold">error</span>
+                                <span class="mx-1">(</span>
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600">"{{value}}"</span>
+                                <span class="mx-1">)</span>
+                                <span>;</span>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">输出错误信息</div>
+                        </div>
+                        
+                        <!-- console.table 积木 -->
+                        <div class="blockly-block" data-function="table" data-template="console.table({{value}});">
+                            <div class="flex items-center">
+                                <span class="text-primary font-medium">console.</span>
+                                <span class="font-bold">table</span>
+                                <span class="mx-1">(</span>
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600">{{value}}</span>
+                                <span class="mx-1">)</span>
+                                <span>;</span>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">以表格形式输出数据</div>
+                        </div>
+                        
+                        <!-- console.time 积木 -->
+                        <div class="blockly-block blockly-block-secondary" data-function="time" data-template="console.time(&quot;{{value}}&quot;);">
+                            <div class="flex items-center">
+                                <span class="text-secondary font-medium">console.</span>
+                                <span class="font-bold">time</span>
+                                <span class="mx-1">(</span>
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600">"{{value}}"</span>
+                                <span class="mx-1">)</span>
+                                <span>;</span>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">开始计时</div>
+                        </div>
+                        
+                        <!-- console.timeEnd 积木 -->
+                        <div class="blockly-block blockly-block-secondary" data-function="timeEnd" data-template="console.timeEnd(&quot;{{value}}&quot;);">
+                            <div class="flex items-center">
+                                <span class="text-secondary font-medium">console.</span>
+                                <span class="font-bold">timeEnd</span>
+                                <span class="mx-1">(</span>
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600">"{{value}}"</span>
+                                <span class="mx-1">)</span>
+                                <span>;</span>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">结束计时并输出结果</div>
+                        </div>
+                        
+                        <!-- console.assert 积木 -->
+                        <div class="blockly-block blockly-block-accent" data-function="assert" data-template="console.assert({{condition}}, &quot;{{message}}&quot;);">
+                            <div class="flex flex-wrap items-center">
+                                <span class="text-accent font-medium">console.</span>
+                                <span class="font-bold">assert</span>
+                                <span class="mx-1">(</span>
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600 mr-1">{{condition}}</span>
+                                <span class="mr-1">,</span>
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600">"{{message}}"</span>
+                                <span class="mx-1">)</span>
+                                <span>;</span>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">断言条件为真，否则输出错误</div>
+                        </div>
+                    </div>
+                    
+                    <!-- 控制类积木 -->
+                    <div class="category-section" data-category="control">
+                        <h3 class="text-sm font-medium text-secondary mb-2">控制类</h3>
+                        
+                        <!-- 函数定义积木 -->
+                        <div class="blockly-block" data-function="function" data-template="function {{name}}() {
+    // 函数内容
+}">
+                            <div class="flex flex-wrap items-center">
+                                <span class="font-bold">function</span>
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600 mx-1">{{name}}</span>
+                                <span>()</span>
+                                <span class="mx-1">{</span>
+                            </div>
+                            <div class="ml-4 text-gray-600">// 函数内容</div>
+                            <div class="flex items-center">
+                                <span>}</span>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">创建一个函数</div>
+                        </div>
+                        
+                        <!-- 调用函数积木 -->
+                        <div class="blockly-block blockly-block-accent" data-function="callFunction" data-template="{{functionName}}({{parameters}});">
+                            <div class="flex flex-wrap items-center">
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600 font-medium">{{functionName}}</span>
+                                <span class="mx-1">(</span>
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600">{{parameters}}</span>
+                                <span class="mx-1">)</span>
+                                <span>;</span>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">调用函数（支持自定义函数）</div>
+                        </div>
+                        
+                        <!-- if条件判断积木 (单独的if) -->
+                        <div class="blockly-block blockly-block-secondary" data-function="if" data-template="if ({{condition}}) {
+    // 条件为真时执行
+}">
+                            <div class="flex flex-wrap items-center">
+                                <span class="font-bold">if</span>
+                                <span class="mx-1">(</span>
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600">{{condition}}</span>
+                                <span class="mx-1">)</span>
+                                <span>{</span>
+                            </div>
+                            <div class="ml-4 text-gray-600">// 条件为真时执行</div>
+                            <div class="flex items-center">
+                                <span>}</span>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">创建if条件判断</div>
+                        </div>
+                        
+                        <!-- else积木 (单独的else) -->
+                        <div class="blockly-block blockly-block-secondary" data-function="else" data-template="else {
+    // 条件为假时执行
+}">
+                            <div class="flex flex-wrap items-center">
+                                <span class="font-bold">else</span>
+                                <span class="mx-1">{</span>
+                            </div>
+                            <div class="ml-4 text-gray-600">// 条件为假时执行</div>
+                            <div class="flex items-center">
+                                <span>}</span>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">创建else分支（需跟在if后）</div>
+                        </div>
+                        
+                        <!-- else if积木 -->
+                        <div class="blockly-block blockly-block-secondary" data-function="elseif" data-template="else if ({{condition}}) {
+    // 条件为真时执行
+}">
+                            <div class="flex flex-wrap items-center">
+                                <span class="font-bold">else if</span>
+                                <span class="mx-1">(</span>
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600">{{condition}}</span>
+                                <span class="mx-1">)</span>
+                                <span>{</span>
+                            </div>
+                            <div class="ml-4 text-gray-600">// 条件为真时执行</div>
+                            <div class="flex items-center">
+                                <span>}</span>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">创建else if分支（需跟在if后）</div>
+                        </div>
+                        
+                        <!-- for循环积木 -->
+                        <div class="blockly-block blockly-block-accent" data-function="for" data-template="for (let {{i}} = 0; {{i}} &lt; {{length}}; {{i}}++) {
+    // 循环体内容
+}">
+                            <div class="flex flex-wrap items-center">
+                                <span class="font-bold">for</span>
+                                <span class="mx-1">(</span>
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600">let {{i}} = 0; {{i}} &lt; {{length}}; {{i}}++</span>
+                                <span class="mx-1">)</span>
+                                <span>{</span>
+                            </div>
+                            <div class="ml-4 text-gray-600">// 循环体内容</div>
+                            <div class="flex items-center">
+                                <span>}</span>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">创建for循环</div>
+                        </div>
+                        
+                        <!-- while循环积木 -->
+                        <div class="blockly-block blockly-block-accent" data-function="while" data-template="while ({{condition}}) {
+    // 循环体内容
+}">
+                            <div class="flex flex-wrap items-center">
+                                <span class="font-bold">while</span>
+                                <span class="mx-1">(</span>
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600">{{condition}}</span>
+                                <span class="mx-1">)</span>
+                                <span>{</span>
+                            </div>
+                            <div class="ml-4 text-gray-600">// 循环体内容</div>
+                            <div class="flex items-center">
+                                <span>}</span>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">创建while循环</div>
+                        </div>
+                        
+                        <!-- break积木 -->
+                        <div class="blockly-block blockly-block-accent" data-function="break" data-template="break;">
+                            <div class="flex flex-wrap items-center">
+                                <span class="font-bold text-accent">break</span>
+                                <span>;</span>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">终止循环或switch语句</div>
+                        </div>
+                        
+                        <!-- continue积木 -->
+                        <div class="blockly-block blockly-block-accent" data-function="continue" data-template="continue;">
+                            <div class="flex flex-wrap items-center">
+                                <span class="font-bold text-accent">continue</span>
+                                <span>;</span>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">跳过当前循环的剩余部分，继续下一次循环</div>
+                        </div>
+                        
+                        <!-- return语句积木 -->
+                        <div class="blockly-block blockly-block-secondary" data-function="return" data-template="return {{value}};">
+                            <div class="flex flex-wrap items-center">
+                                <span class="font-bold text-secondary">return</span>
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600 mx-1">{{value}}</span>
+                                <span>;</span>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">从函数返回值</div>
+                        </div>
+                        
+                        <!-- 空return语句积木 -->
+                        <div class="blockly-block blockly-block-secondary" data-function="returnEmpty" data-template="return;">
+                            <div class="flex flex-wrap items-center">
+                                <span class="font-bold text-secondary">return</span>
+                                <span>;</span>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">从函数返回（无返回值）</div>
+                        </div>
+                    </div>
+                    
+                    <!-- 变量类积木 -->
+                    <div class="category-section" data-category="variable">
+                        <h3 class="text-sm font-medium text-variable mb-2">变量类</h3>
+                        
+                        <!-- let声明变量 -->
+                        <div class="blockly-block blockly-block-variable" data-function="let" data-template="let {{name}} = {{value}};">
+                            <div class="flex flex-wrap items-center">
+                                <span class="font-bold text-variable">let</span>
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600 mx-1">{{name}}</span>
+                                <span>=</span>
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600 mx-1">{{value}}</span>
+                                <span>;</span>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">声明可重新赋值的变量</div>
+                        </div>
+                        
+                        <!-- const声明变量 -->
+                        <div class="blockly-block blockly-block-variable" data-function="const" data-template="const {{name}} = {{value}};">
+                            <div class="flex flex-wrap items-center">
+                                <span class="font-bold text-variable">const</span>
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600 mx-1">{{name}}</span>
+                                <span>=</span>
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600 mx-1">{{value}}</span>
+                                <span>;</span>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">声明常量（不可重新赋值）</div>
+                        </div>
+                        
+                        <!-- var声明变量 -->
+                        <div class="blockly-block blockly-block-variable" data-function="var" data-template="var {{name}} = {{value}};">
+                            <div class="flex flex-wrap items-center">
+                                <span class="font-bold text-variable">var</span>
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600 mx-1">{{name}}</span>
+                                <span>=</span>
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600 mx-1">{{value}}</span>
+                                <span>;</span>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">声明函数作用域变量</div>
+                        </div>
+                        
+                        <!-- 更新变量值 -->
+                        <div class="blockly-block blockly-block-variable" data-function="updateVariable" data-template="{{name}} = {{newValue}};">
+                            <div class="flex flex-wrap items-center">
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600">{{name}}</span>
+                                <span>=</span>
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600 mx-1">{{newValue}}</span>
+                                <span>;</span>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">更新变量的值</div>
+                        </div>
+                        
+                        <!-- 变量自增 -->
+                        <div class="blockly-block blockly-block-variable" data-function="increment" data-template="{{name}}++;">
+                            <div class="flex flex-wrap items-center">
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600">{{name}}</span>
+                                <span>++;</span>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">变量值自增1</div>
+                        </div>
+                        
+                        <!-- 变量自减 -->
+                        <div class="blockly-block blockly-block-variable" data-function="decrement" data-template="{{name}}--;">
+                            <div class="flex flex-wrap items-center">
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600">{{name}}</span>
+                                <span>--;</span>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">变量值自减1</div>
+                        </div>
+                        
+                        <!-- 直接调用变量 -->
+                        <div class="blockly-block blockly-block-variable" data-function="callVariable" data-template="{{name}}">
+                            <div class="flex flex-wrap items-center">
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600 font-medium">{{name}}</span>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">直接调用/引用变量</div>
+                        </div>
+                    </div>
+                    
+                    <!-- 元组类积木 -->
+                    <div class="category-section" data-category="tuple">
+                        <h3 class="text-sm font-medium text-tuple mb-2">元组类</h3>
+                        
+                        <!-- 创建元组 -->
+                        <div class="blockly-block blockly-block-tuple" data-function="createTuple" data-template="const {{name}} = [{{values}}];">
+                            <div class="flex flex-wrap items-center">
+                                <span class="font-bold text-tuple">const</span>
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600 mx-1">{{name}}</span>
+                                <span>=</span>
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600 mx-1">[{{values}}]</span>
+                                <span>;</span>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">创建一个元组（数组）</div>
+                        </div>
+                        
+                        <!-- 访问元组元素 -->
+                        <div class="blockly-block blockly-block-tuple" data-function="accessTuple" data-template="{{name}}[{{index}}]">
+                            <div class="flex flex-wrap items-center">
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600">{{name}}</span>
+                                <span>[</span>
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600">{{index}}</span>
+                                <span>]</span>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">访问元组中的元素</div>
+                        </div>
+                        
+                        <!-- 修改元组元素 -->
+                        <div class="blockly-block blockly-block-tuple" data-function="modifyTuple" data-template="{{name}}[{{index}}] = {{newValue}};">
+                            <div class="flex flex-wrap items-center">
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600">{{name}}</span>
+                                <span>[</span>
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600">{{index}}</span>
+                                <span>]</span>
+                                <span>=</span>
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600 mx-1">{{newValue}}</span>
+                                <span>;</span>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">修改元组中的元素</div>
+                        </div>
+                        
+                        <!-- 获取元组长度 -->
+                        <div class="blockly-block blockly-block-tuple" data-function="tupleLength" data-template="{{name}}.length">
+                            <div class="flex flex-wrap items-center">
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600">{{name}}</span>
+                                <span class="text-tuple font-medium">.</span>
+                                <span class="font-bold">length</span>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">获取元组的长度</div>
+                        </div>
+                        
+                        <!-- 向元组添加元素 -->
+                        <div class="blockly-block blockly-block-tuple" data-function="tuplePush" data-template="{{name}}.push({{value}});">
+                            <div class="flex flex-wrap items-center">
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600">{{name}}</span>
+                                <span class="text-tuple font-medium">.</span>
+                                <span class="font-bold">push</span>
+                                <span>(</span>
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600">{{value}}</span>
+                                <span>)</span>
+                                <span>;</span>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">向元组末尾添加元素</div>
+                        </div>
+                        
+                        <!-- 从元组移除元素 -->
+                        <div class="blockly-block blockly-block-tuple" data-function="tuplePop" data-template="{{name}}.pop();">
+                            <div class="flex flex-wrap items-center">
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600">{{name}}</span>
+                                <span class="text-tuple font-medium">.</span>
+                                <span class="font-bold">pop</span>
+                                <span>()</span>
+                                <span>;</span>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">移除并返回元组的最后一个元素</div>
+                        </div>
+                    </div>
+                    
+                    <!-- 运算类积木 -->
+                    <div class="category-section" data-category="math">
+                        <h3 class="text-sm font-medium text-math mb-2">运算类</h3>
+                        
+                        <!-- 加法运算 -->
+                        <div class="blockly-block blockly-block-math" data-function="addition" data-template="{{a}} + {{b}}">
+                            <div class="flex flex-wrap items-center">
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600">{{a}}</span>
+                                <span class="mx-2 font-bold">+</span>
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600">{{b}}</span>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">加法运算</div>
+                        </div>
+                        
+                        <!-- 减法运算 -->
+                        <div class="blockly-block blockly-block-math" data-function="subtraction" data-template="{{a}} - {{b}}">
+                            <div class="flex flex-wrap items-center">
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600">{{a}}</span>
+                                <span class="mx-2 font-bold">-</span>
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600">{{b}}</span>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">减法运算</div>
+                        </div>
+                        
+                        <!-- 乘法运算 -->
+                        <div class="blockly-block blockly-block-math" data-function="multiplication" data-template="{{a}} * {{b}}">
+                            <div class="flex flex-wrap items-center">
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600">{{a}}</span>
+                                <span class="mx-2 font-bold">*</span>
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600">{{b}}</span>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">乘法运算</div>
+                        </div>
+                        
+                        <!-- 除法运算 -->
+                        <div class="blockly-block blockly-block-math" data-function="division" data-template="{{a}} / {{b}}">
+                            <div class="flex flex-wrap items-center">
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600">{{a}}</span>
+                                <span class="mx-2 font-bold">/</span>
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600">{{b}}</span>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">除法运算</div>
+                        </div>
+                        
+                        <!-- 取余运算 -->
+                        <div class="blockly-block blockly-block-math" data-function="modulus" data-template="{{a}} % {{b}}">
+                            <div class="flex flex-wrap items-center">
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600">{{a}}</span>
+                                <span class="mx-2 font-bold">%</span>
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600">{{b}}</span>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">取余运算（模运算）</div>
+                        </div>
+                        
+                        <!-- 随机数 -->
+                        <div class="blockly-block blockly-block-math" data-function="random" data-template="Math.random() * {{max}}">
+                            <div class="flex flex-wrap items-center">
+                                <span class="text-math font-medium">Math.</span>
+                                <span class="font-bold">random</span>
+                                <span>()</span>
+                                <span class="mx-1 font-bold">*</span>
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600">{{max}}</span>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">生成0到指定值之间的随机数</div>
+                        </div>
+                        
+                        <!-- 平方根 -->
+                        <div class="blockly-block blockly-block-math" data-function="sqrt" data-template="Math.sqrt({{number}})">
+                            <div class="flex flex-wrap items-center">
+                                <span class="text-math font-medium">Math.</span>
+                                <span class="font-bold">sqrt</span>
+                                <span class="mx-1">(</span>
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600">{{number}}</span>
+                                <span class="mx-1">)</span>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">计算平方根</div>
+                        </div>
+                        
+                        <!-- 新增：绝对值 -->
+                        <div class="blockly-block blockly-block-math" data-function="abs" data-template="Math.abs({{number}})">
+                            <div class="flex flex-wrap items-center">
+                                <span class="text-math font-medium">Math.</span>
+                                <span class="font-bold">abs</span>
+                                <span class="mx-1">(</span>
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600">{{number}}</span>
+                                <span class="mx-1">)</span>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">计算绝对值</div>
+                        </div>
+                        
+                        <!-- 新增：向上取整 -->
+                        <div class="blockly-block blockly-block-math" data-function="ceil" data-template="Math.ceil({{number}})">
+                            <div class="flex flex-wrap items-center">
+                                <span class="text-math font-medium">Math.</span>
+                                <span class="font-bold">ceil</span>
+                                <span class="mx-1">(</span>
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600">{{number}}</span>
+                                <span class="mx-1">)</span>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">向上取整</div>
+                        </div>
+                        
+                        <!-- 新增：向下取整 -->
+                        <div class="blockly-block blockly-block-math" data-function="floor" data-template="Math.floor({{number}})">
+                            <div class="flex flex-wrap items-center">
+                                <span class="text-math font-medium">Math.</span>
+                                <span class="font-bold">floor</span>
+                                <span class="mx-1">(</span>
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600">{{number}}</span>
+                                <span class="mx-1">)</span>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">向下取整</div>
+                        </div>
+                        
+                        <!-- 新增：四舍五入 -->
+                        <div class="blockly-block blockly-block-math" data-function="round" data-template="Math.round({{number}})">
+                            <div class="flex flex-wrap items-center">
+                                <span class="text-math font-medium">Math.</span>
+                                <span class="font-bold">round</span>
+                                <span class="mx-1">(</span>
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600">{{number}}</span>
+                                <span class="mx-1">)</span>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">四舍五入</div>
+                        </div>
+                    </div>
+                    
+                    <!-- 布尔类积木 -->
+                    <div class="category-section" data-category="boolean">
+                        <h3 class="text-sm font-medium text-boolean mb-2">布尔类</h3>
+                        
+                        <!-- 等于（严格） -->
+                        <div class="blockly-block blockly-block-boolean" data-function="equal" data-template="{{a}} === {{b}}">
+                            <div class="flex flex-wrap items-center">
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600">{{a}}</span>
+                                <span class="mx-2 font-bold">===</span>
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600">{{b}}</span>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">严格等于（值和类型都相等）</div>
+                        </div>
+                        
+                        <!-- 不等于（严格） -->
+                        <div class="blockly-block blockly-block-boolean" data-function="notEqual" data-template="{{a}} !== {{b}}">
+                            <div class="flex flex-wrap items-center">
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600">{{a}}</span>
+                                <span class="mx-2 font-bold">!==</span>
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600">{{b}}</span>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">严格不等于（值或类型不相等）</div>
+                        </div>
+                        
+                        <!-- 非严格等于 -->
+                        <div class="blockly-block blockly-block-boolean" data-function="looseEqual" data-template="{{a}} == {{b}}">
+                            <div class="flex flex-wrap items-center">
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600">{{a}}</span>
+                                <span class="mx-2 font-bold">==</span>
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600">{{b}}</span>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">非严格等于（仅值相等，自动类型转换）</div>
+                        </div>
+                        
+                        <!-- 非严格不等于 -->
+                        <div class="blockly-block blockly-block-boolean" data-function="looseNotEqual" data-template="{{a}} != {{b}}">
+                            <div class="flex flex-wrap items-center">
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600">{{a}}</span>
+                                <span class="mx-2 font-bold">!=</span>
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600">{{b}}</span>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">非严格不等于（值不相等，自动类型转换）</div>
+                        </div>
+                        
+                        <!-- 小于等于 -->
+                        <div class="blockly-block blockly-block-boolean" data-function="lessOrEqual" data-template="{{a}} &lt;= {{b}}">
+                            <div class="flex flex-wrap items-center">
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600">{{a}}</span>
+                                <span class="mx-2 font-bold">&lt;=</span>
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600">{{b}}</span>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">小于等于</div>
+                        </div>
+                        
+                        <!-- 大于等于 -->
+                        <div class="blockly-block blockly-block-boolean" data-function="greaterOrEqual" data-template="{{a}} &gt;= {{b}}">
+                            <div class="flex flex-wrap items-center">
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600">{{a}}</span>
+                                <span class="mx-2 font-bold">&gt;=</span>
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600">{{b}}</span>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">大于等于</div>
+                        </div>
+                        
+                        <!-- 小于 -->
+                        <div class="blockly-block blockly-block-boolean" data-function="lessThan" data-template="{{a}} &lt; {{b}}">
+                            <div class="flex flex-wrap items-center">
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600">{{a}}</span>
+                                <span class="mx-2 font-bold">&lt;</span>
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600">{{b}}</span>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">小于</div>
+                        </div>
+                        
+                        <!-- 大于 -->
+                        <div class="blockly-block blockly-block-boolean" data-function="greaterThan" data-template="{{a}} &gt; {{b}}">
+                            <div class="flex flex-wrap items-center">
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600">{{a}}</span>
+                                <span class="mx-2 font-bold">&gt;</span>
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600">{{b}}</span>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">大于</div>
+                        </div>
+                        
+                        <!-- true -->
+                        <div class="blockly-block blockly-block-boolean" data-function="trueValue" data-template="true">
+                            <div class="flex flex-wrap items-center">
+                                <span class="font-bold text-green-600">true</span>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">布尔值：真</div>
+                        </div>
+                        
+                        <!-- false -->
+                        <div class="blockly-block blockly-block-boolean" data-function="falseValue" data-template="false">
+                            <div class="flex flex-wrap items-center">
+                                <span class="font-bold text-red-600">false</span>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">布尔值：假</div>
+                        </div>
+                        
+                        <!-- 与运算 (&&) -->
+                        <div class="blockly-block blockly-block-boolean" data-function="and" data-template="{{a}} &amp;&amp; {{b}}">
+                            <div class="flex flex-wrap items-center">
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600">{{a}}</span>
+                                <span class="mx-2 font-bold">&amp;&amp;&nbsp;</span>
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600">{{b}}</span>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">逻辑与（两个条件都为真才返回真）</div>
+                        </div>
+                        
+                        <!-- 或运算 (||) -->
+                        <div class="blockly-block blockly-block-boolean" data-function="or" data-template="{{a}} || {{b}}">
+                            <div class="flex flex-wrap items-center">
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600">{{a}}</span>
+                                <span class="mx-2 font-bold">||&nbsp;</span>
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600">{{b}}</span>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">逻辑或（至少一个条件为真就返回真）</div>
+                        </div>
+                        
+                        <!-- 非运算 (!) -->
+                        <div class="blockly-block blockly-block-boolean" data-function="not" data-template="!{{a}}">
+                            <div class="flex flex-wrap items-center">
+                                <span class="font-bold mr-2">!</span>
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600">{{a}}</span>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">逻辑非（取反）</div>
+                        </div>
+                    </div>
+                    
+                    <!-- 新增：字符类积木 -->
+                    <div class="category-section" data-category="string">
+                        <h3 class="text-sm font-medium text-string mb-2">字符类</h3>
+                        
+                        <!-- 字符串字面量 -->
+                        <div class="blockly-block blockly-block-string" data-function="stringLiteral" data-template="&quot;{{value}}&quot;">
+                            <div class="flex flex-wrap items-center">
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600">"{{value}}"</span>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">字符串字面量</div>
+                        </div>
+                        
+                        <!-- 字符串长度 -->
+                        <div class="blockly-block blockly-block-string" data-function="stringLength" data-template="{{str}}.length">
+                            <div class="flex flex-wrap items-center">
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600">{{str}}</span>
+                                <span class="text-string font-medium">.</span>
+                                <span class="font-bold">length</span>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">获取字符串长度</div>
+                        </div>
+                        
+                        <!-- 字符串拼接 -->
+                        <div class="blockly-block blockly-block-string" data-function="stringConcat" data-template="{{str1}} + {{str2}}">
+                            <div class="flex flex-wrap items-center">
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600">{{str1}}</span>
+                                <span class="mx-2 font-bold">+</span>
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600">{{str2}}</span>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">字符串拼接</div>
+                        </div>
+                        
+                        <!-- 转换为大写 -->
+                        <div class="blockly-block blockly-block-string" data-function="toUpperCase" data-template="{{str}}.toUpperCase()">
+                            <div class="flex flex-wrap items-center">
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600">{{str}}</span>
+                                <span class="text-string font-medium">.</span>
+                                <span class="font-bold">toUpperCase()</span>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">转换为大写字母</div>
+                        </div>
+                        
+                        <!-- 转换为小写 -->
+                        <div class="blockly-block blockly-block-string" data-function="toLowerCase" data-template="{{str}}.toLowerCase()">
+                            <div class="flex flex-wrap items-center">
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600">{{str}}</span>
+                                <span class="text-string font-medium">.</span>
+                                <span class="font-bold">toLowerCase()</span>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">转换为小写字母</div>
+                        </div>
+                        
+                        <!-- 截取子字符串 -->
+                        <div class="blockly-block blockly-block-string" data-function="substring" data-template="{{str}}.substring({{start}}, {{end}})">
+                            <div class="flex flex-wrap items-center">
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600">{{str}}</span>
+                                <span class="text-string font-medium">.</span>
+                                <span class="font-bold">substring</span>
+                                <span>(</span>
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600 mr-1">{{start}}</span>
+                                <span class="mr-1">,</span>
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600">{{end}}</span>
+                                <span>)</span>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">截取子字符串</div>
+                        </div>
+                        
+                        <!-- 查找子字符串 -->
+                        <div class="blockly-block blockly-block-string" data-function="indexOf" data-template="{{str}}.indexOf(&quot;{{search}}&quot;)">
+                            <div class="flex flex-wrap items-center">
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600">{{str}}</span>
+                                <span class="text-string font-medium">.</span>
+                                <span class="font-bold">indexOf</span>
+                                <span>(</span>
+                                <span class="bg-gray-100 px-2 py-1 rounded text-gray-600">"{{search}}"</span>
+                                <span>)</span>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">查找子字符串位置</div>
+                        </div>
+                    </div>
+                    
+                    <!-- 新增：特殊值积木（包含Null） -->
+                    <div class="category-section" data-category="special">
+                        <h3 class="text-sm font-medium text-accent mb-2">特殊值</h3>
+                        
+                        <!-- Null值 -->
+                        <div class="blockly-block blockly-block-accent" data-function="nullValue" data-template="null">
+                            <div class="flex flex-wrap items-center">
+                                <span class="font-bold text-accent">null</span>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">表示空值</div>
+                        </div>
+                        
+                        <!-- Undefined值 -->
+                        <div class="blockly-block blockly-block-accent" data-function="undefinedValue" data-template="undefined">
+                            <div class="flex flex-wrap items-center">
+                                <span class="font-bold text-accent">undefined</span>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">表示未定义</div>
+                        </div>
+                        
+                        <!-- NaN值 -->
+                        <div class="blockly-block blockly-block-accent" data-function="nanValue" data-template="NaN">
+                            <div class="flex flex-wrap items-center">
+                                <span class="font-bold text-accent">NaN</span>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">表示非数字</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+        
+        <!-- 右侧代码预览区 -->
+        <section class="w-2/3 flex flex-col bg-white overflow-hidden">
+            <div class="p-4 bg-gray-100 border-b border-gray-300 flex justify-between items-center">
+                <h2 class="font-bold text-lg text-dark">代码编辑区</h2>
+                <div class="text-sm text-gray-500">
+                    <span id="lineCount">0 行</span>
+                </div>
+            </div>
+            
+            <div class="flex-1 overflow-hidden flex flex-col">
+                <!-- 代码输入区域 -->
+                <textarea id="codeEditor" class="flex-1 w-full p-4 font-code text-sm resize-none focus:outline-none" placeholder="点击左侧的积木添加代码到这里..."></textarea>
+                
+                <!-- 状态信息区域 -->
+                <div class="h-1/3 border-t border-gray-300 flex flex-col">
+                    <div class="p-2 bg-gray-100 border-b border-gray-300 flex justify-between items-center">
+                        <h3 class="font-medium text-gray-700">状态信息输出栏</h3>
+                        <button id="clearStatusBtn" class="text-sm text-gray-500 hover:text-gray-700">
+                            <i class="fa fa-eraser"></i> 清空
+                        </button>
+                    </div>
+                    <div id="statusConsole" class="flex-1 overflow-y-auto p-4 bg-gray-900 text-gray-100 font-code text-sm">
+                        <div class="text-gray-400 italic">操作信息将显示在这里...</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        // DOM 元素
+        const codeEditor = document.getElementById('codeEditor');
+        const saveBtn = document.getElementById('saveBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        const statusConsole = document.getElementById('statusConsole');
+        const clearStatusBtn = document.getElementById('clearStatusBtn');
+        const lineCount = document.getElementById('lineCount');
+        const blocks = document.querySelectorAll('.blockly-block');
+        const categoryItems = document.querySelectorAll('.category-item');
+        const categorySections = document.querySelectorAll('.category-section');
+        const blocksContainer = document.getElementById('blocksContainer');
+        
+        // 更新行数显示
+        function updateLineCount() {
+            const lines = codeEditor.value.split('\n').length;
+            lineCount.textContent = `${lines} 行`;
+        }
+        
+        // 显示状态信息
+        function showStatus(message, type = 'info') {
+            const statusDiv = document.createElement('div');
+            
+            // 设置不同类型信息的样式
+            switch(type) {
+                case 'success':
+                    statusDiv.className = 'text-green-400 mb-1';
+                    break;
+                case 'error':
+                    statusDiv.className = 'text-red-400 mb-1';
+                    break;
+                case 'info':
+                default:
+                    statusDiv.className = 'text-blue-400 mb-1';
+            }
+            
+            // 添加时间戳和消息
+            const timestamp = new Date().toLocaleTimeString();
+            statusDiv.textContent = `[${timestamp}] ${message}`;
+            statusConsole.appendChild(statusDiv);
+            
+            // 滚动到底部
+            statusConsole.scrollTop = statusConsole.scrollHeight;
+        }
+        
+        // 初始化函数参数
+        const defaultParams = {
+            log: { value: '信息' },
+            warn: { value: '警告信息' },
+            error: { value: '错误信息' },
+            table: { value: '[1, 2, 3]' },
+            time: { value: '计时器' },
+            timeEnd: { value: '计时器' },
+            assert: { condition: 'condition', message: '断言失败' },
+            function: { name: 'myFunction' },
+            callFunction: { functionName: 'functionName', parameters: '' },
+            if: { condition: 'x > 5' },
+            else: {},
+            elseif: { condition: 'x > 0' },
+            for: { i: 'i', length: '10' },
+            while: { condition: 'x > 0' },
+            let: { name: 'count', value: '0' },
+            const: { name: 'PI', value: '3.14' },
+            var: { name: 'total', value: '0' },
+            updateVariable: { name: 'count', newValue: '10' },
+            increment: { name: 'count' },
+            decrement: { name: 'count' },
+            callVariable: { name: 'variableName' },
+            createTuple: { name: 'myTuple', values: '1, 2, 3, "four"' },
+            accessTuple: { name: 'myTuple', index: '0' },
+            modifyTuple: { name: 'myTuple', index: '0', newValue: '100' },
+            tupleLength: { name: 'myTuple' },
+            tuplePush: { name: 'myTuple', value: 'newValue' },
+            tuplePop: { name: 'myTuple' },
+            addition: { a: '5', b: '3' },
+            subtraction: { a: '10', b: '4' },
+            multiplication: { a: '6', b: '7' },
+            division: { a: '20', b: '5' },
+            modulus: { a: '15', b: '4' },
+            random: { max: '100' },
+            sqrt: { number: '25' },
+            // 新增：数学函数参数
+            abs: { number: '-5' },
+            ceil: { number: '3.2' },
+            floor: { number: '3.7' },
+            round: { number: '3.5' },
+            // 布尔类参数
+            equal: { a: 'x', b: 'y' },
+            notEqual: { a: 'x', b: 'y' },
+            looseEqual: { a: 'x', b: 'y' },
+            looseNotEqual: { a: 'x', b: 'y' },
+            lessOrEqual: { a: 'x', b: 'y' },
+            greaterOrEqual: { a: 'x', b: 'y' },
+            lessThan: { a: 'x', b: 'y' },
+            greaterThan: { a: 'x', b: 'y' },
+            and: { a: 'condition1', b: 'condition2' },
+            or: { a: 'condition1', b: 'condition2' },
+            not: { a: 'condition' },
+            // 控制类参数
+            break: {},
+            continue: {},
+            return: { value: 'result' },
+            returnEmpty: {},
+            // 新增：字符类参数
+            stringLiteral: { value: '文本内容' },
+            stringLength: { str: 'str' },
+            stringConcat: { str1: '"Hello "', str2: '"World"' },
+            toUpperCase: { str: 'str' },
+            toLowerCase: { str: 'str' },
+            substring: { str: 'str', start: '0', end: '5' },
+            indexOf: { str: 'str', search: '子串' },
+            // 新增：特殊值参数
+            nullValue: {},
+            undefinedValue: {},
+            nanValue: {}
+        };
+        
+        // 在光标位置插入文本
+        function insertAtCursor(text) {
+            // 获取当前光标位置
+            const cursorPos = codeEditor.selectionStart;
+            // 获取当前文本内容
+            const currentValue = codeEditor.value;
+            
+            // 在光标位置插入新文本
+            const newValue = 
+                currentValue.substring(0, cursorPos) + 
+                text + 
+                currentValue.substring(cursorPos);
+            
+            // 更新文本框内容
+            codeEditor.value = newValue;
+            
+            // 计算新的光标位置
+            const newCursorPos = cursorPos + text.length;
+            
+            // 设置新的光标位置
+            codeEditor.focus();
+            codeEditor.setSelectionRange(newCursorPos, newCursorPos);
+            
+            // 滚动到光标位置
+            codeEditor.scrollTop = codeEditor.scrollHeight;
+        }
+        
+        // 点击积木添加代码
+        blocks.forEach(block => {
+            block.addEventListener('click', () => {
+                const template = block.getAttribute('data-template');
+                const func = block.getAttribute('data-function');
+                let code = template;
+                
+                // 替换默认参数
+                const params = defaultParams[func] || {};
+                Object.keys(params).forEach(key => {
+                    code = code.replace(new RegExp(`{{${key}}}`, 'g'), params[key]);
+                });
+                
+                // 确定是否需要添加换行
+                const currentValue = codeEditor.value;
+                const cursorPos = codeEditor.selectionStart;
+                let prefix = '';
+                
+                // 如果光标不在开头且前一个字符不是换行，则添加换行
+                if (cursorPos > 0 && currentValue.charAt(cursorPos - 1) !== '\n') {
+                    prefix = '\n';
+                }
+                
+                // 对于多行代码块，在后面也添加一个换行
+                const isMultiLine = code.includes('\n');
+                const suffix = isMultiLine ? '\n' : '';
+                
+                // 在光标位置插入代码
+                insertAtCursor(prefix + code + suffix);
+                
+                // 更新行数和状态
+                updateLineCount();
+                showStatus(`已添加 ${func} 代码块`);
+                
+                // 添加视觉反馈
+                block.classList.add('scale-95');
+                setTimeout(() => block.classList.remove('scale-95'), 200);
+            });
+            
+            // 右键点击调整参数
+            block.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                const func = block.getAttribute('data-function');
+                const params = defaultParams[func] || {};
+                
+                // 根据不同函数显示不同的参数输入
+                let newParams = {};
+                let paramChanged = false;
+                
+                // 处理新增的数学函数参数
+                if (['abs', 'ceil', 'floor', 'round', 'sqrt'].includes(func)) {
+                    const number = prompt('请输入数值:', params.number);
+                    if (number !== null && number !== params.number) {
+                        newParams.number = number;
+                        paramChanged = true;
+                    }
+                }
+                // 处理字符类积木参数
+                else if (func === 'stringLiteral') {
+                    const value = prompt('请输入字符串内容:', params.value);
+                    if (value !== null && value !== params.value) {
+                        newParams.value = value;
+                        paramChanged = true;
+                    }
+                }
+                else if (['stringLength', 'toUpperCase', 'toLowerCase'].includes(func)) {
+                    const str = prompt('请输入字符串变量名:', params.str);
+                    if (str !== null && str !== params.str) {
+                        newParams.str = str;
+                        paramChanged = true;
+                    }
+                }
+                else if (func === 'stringConcat') {
+                    const str1 = prompt('请输入第一个字符串:', params.str1);
+                    const str2 = prompt('请输入第二个字符串:', params.str2);
+                    
+                    if (str1 !== null && str1 !== params.str1) {
+                        newParams.str1 = str1;
+                        paramChanged = true;
+                    }
+                    if (str2 !== null && str2 !== params.str2) {
+                        newParams.str2 = str2;
+                        paramChanged = true;
+                    }
+                }
+                else if (func === 'substring') {
+                    const str = prompt('请输入字符串变量名:', params.str);
+                    const start = prompt('请输入开始索引:', params.start);
+                    const end = prompt('请输入结束索引:', params.end);
+                    
+                    if (str !== null && str !== params.str) {
+                        newParams.str = str;
+                        paramChanged = true;
+                    }
+                    if (start !== null && start !== params.start) {
+                        newParams.start = start;
+                        paramChanged = true;
+                    }
+                    if (end !== null && end !== params.end) {
+                        newParams.end = end;
+                        paramChanged = true;
+                    }
+                }
+                else if (func === 'indexOf') {
+                    const str = prompt('请输入字符串变量名:', params.str);
+                    const search = prompt('请输入要查找的子字符串:', params.search);
+                    
+                    if (str !== null && str !== params.str) {
+                        newParams.str = str;
+                        paramChanged = true;
+                    }
+                    if (search !== null && search !== params.search) {
+                        newParams.search = search;
+                        paramChanged = true;
+                    }
+                }
+                // 处理布尔类积木的参数
+                else if (['equal', 'notEqual', 'lessOrEqual', 'greaterOrEqual', 'lessThan', 'greaterThan', 'and', 'or', 'looseEqual', 'looseNotEqual'].includes(func)) {
+                    const a = prompt('请输入第一个值或变量:', params.a);
+                    const b = prompt('请输入第二个值或变量:', params.b);
+                    
+                    if (a !== null && a !== params.a) {
+                        newParams.a = a;
+                        paramChanged = true;
+                    }
+                    if (b !== null && b !== params.b) {
+                        newParams.b = b;
+                        paramChanged = true;
+                    }
+                }
+                // 处理非运算
+                else if (func === 'not') {
+                    const a = prompt('请输入要取反的值或条件:', params.a);
+                    if (a !== null && a !== params.a) {
+                        newParams.a = a;
+                        paramChanged = true;
+                    }
+                }
+                // 处理return语句参数
+                else if (func === 'return') {
+                    const value = prompt('请输入返回值:', params.value);
+                    if (value !== null && value !== params.value) {
+                        newParams.value = value;
+                        paramChanged = true;
+                    }
+                }
+                // 处理其他类型积木的参数
+                else if (['addition', 'subtraction', 'multiplication', 'division', 'modulus'].includes(func)) {
+                    const a = prompt('请输入第一个值:', params.a);
+                    const b = prompt('请输入第二个值:', params.b);
+                    
+                    if (a !== null && a !== params.a) {
+                        newParams.a = a;
+                        paramChanged = true;
+                    }
+                    if (b !== null && b !== params.b) {
+                        newParams.b = b;
+                        paramChanged = true;
+                    }
+                }
+                else if (func === 'random') {
+                    const max = prompt('请输入最大值:', params.max);
+                    if (max !== null && max !== params.max) {
+                        newParams.max = max;
+                        paramChanged = true;
+                    }
+                }
+                else if (func === 'callFunction') {
+                    const functionName = prompt('请输入函数名:', params.functionName);
+                    const parameters = prompt('请输入参数（多个参数用逗号分隔）:', params.parameters);
+                    
+                    if (functionName !== null && functionName !== params.functionName) {
+                        newParams.functionName = functionName;
+                        paramChanged = true;
+                    }
+                    if (parameters !== null && parameters !== params.parameters) {
+                        newParams.parameters = parameters;
+                        paramChanged = true;
+                    }
+                }
+                else if (func === 'let' || func === 'const' || func === 'var') {
+                    const name = prompt('请输入变量名:', params.name);
+                    const value = prompt('请输入初始值:', params.value);
+                    if (name !== null && name !== params.name) {
+                        newParams.name = name;
+                        paramChanged = true;
+                    }
+                    if (value !== null && value !== params.value) {
+                        newParams.value = value;
+                        paramChanged = true;
+                    }
+                }
+                
+                // 更新参数
+                if (paramChanged) {
+                    defaultParams[func] = { ...params, ...newParams };
+                    
+                    // 更新积木显示
+                    let displayHtml = block.innerHTML;
+                    Object.keys(newParams).forEach(key => {
+                        const regex = new RegExp(`{{${key}}}`, 'g');
+                        displayHtml = displayHtml.replace(regex, newParams[key]);
+                    });
+                    block.innerHTML = displayHtml;
+                    showStatus(`已更新 ${func} 代码块参数`);
+                }
+            });
+        });
+        
+        // 分类导航功能
+        categoryItems.forEach(item => {
+            item.addEventListener('click', () => {
+                const category = item.getAttribute('data-category');
+                
+                // 更新活跃状态
+                categoryItems.forEach(i => i.classList.remove('active'));
+                item.classList.add('active');
+                
+                // 滚动到对应分类区域
+                const section = document.querySelector(`.category-section[data-category="${category}"]`);
+                if (section) {
+                    section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    showStatus(`已切换到 ${item.textContent.trim()} 分类`);
+                }
+            });
+        });
+        
+        // 保存为JS文件
+        saveBtn.addEventListener('click', () => {
+            const code = codeEditor.value.trim();
+            
+            if (!code) {
+                showStatus('无法保存空文件，请先添加代码', 'error');
+                return;
+            }
+            
+            // 询问文件名
+            const fileName = prompt('请输入文件名（无需添加.js扩展名）:', 'script');
+            
+            if (fileName === null) {
+                showStatus('已取消保存', 'info');
+                return;
+            }
+            
+            // 确保文件名有效
+            const validFileName = fileName.replace(/[^a-zA-Z0-9_.-]/g, '_') || 'script';
+            const fullFileName = `${validFileName}.js`;
+            
+            // 创建Blob对象
+            const blob = new Blob([code], { type: 'text/javascript' });
+            const url = URL.createObjectURL(blob);
+            
+            // 创建下载链接
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = fullFileName;
+            document.body.appendChild(a);
+            a.click();
+            
+            // 清理
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            showStatus(`已成功保存为 ${fullFileName}`, 'success');
+        });
+        
+        // 清空代码
+        clearBtn.addEventListener('click', () => {
+            if (codeEditor.value.trim() && !confirm('确定要清空代码吗？')) {
+                return;
+            }
+            
+            codeEditor.value = '';
+            updateLineCount();
+            showStatus('代码已清空', 'info');
+        });
+        
+        // 清空状态信息然后监听代码变化更新行数
+        clearStatusBtn.addEventListener('click', () => {
+            statusConsole.innerHTML = '<div class="text-gray-400 italic">操作信息将显示在这里...</div>';
+            showStatus('状态信息已清空', 'info');
+        });
+        codeEditor.addEventListener('input', updateLineCount);
+        
+        // 初始化
+        updateLineCount();
+        showStatus('编辑器已准备就绪', 'info');
+        // 默认选中第一个分类
+        if (categoryItems.length > 0) {
+            categoryItems[0].classList.add('active');
+            // 滚动到第一个分类
+            const firstCategory = categoryItems[0].getAttribute('data-category');
+            const section = document.querySelector(`.category-section[data-category="${firstCategory}"]`);
+            if (section) {
+                section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        }
+    </script>
+    </body>
+</html>
